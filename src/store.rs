@@ -91,6 +91,8 @@ pub mod store
     #[cfg(test)]
     mod store_tests {
         use crate::Store;
+        use super::unqlite::UnQLite;
+        use std::fs;
 
         #[test]
         fn add_an_area()
@@ -156,6 +158,24 @@ pub mod store
         {
             let mut store = Store::initialize();
             assert!(store.clean_area("boo").is_err());
+        }
+
+        #[test]
+        fn test_database_persistance()
+        {
+            let database_title = "test_database";
+            let area_name = "bathroom sink";
+            {
+                let mut store = Store::initialize_from(&database_title);
+                store.declare_area(area_name);
+                assert_eq!(store.adjust_score(area_name, 5).unwrap(), 5);
+            }
+            {
+                let mut store = Store::initialize_from(&database_title);
+                assert_eq!(store.score_of(area_name).unwrap(), 5);
+            }
+
+            fs::remove_file(database_title);
         }
     }
 }
