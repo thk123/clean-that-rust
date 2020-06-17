@@ -47,5 +47,11 @@ pub mod store
             store.declare_area("bathroom sink");
             assert_eq!(store.score_of("bathroom sink").expect("Room not found"), 0);
         }
+
+        fn get_nonexistant_area()
+        {
+            let mut store = Store::initialize();
+            assert!(store.score_of("bla").is_none());
+        }
     }
 }
