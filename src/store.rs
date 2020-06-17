@@ -37,6 +37,19 @@ pub mod store
                 Some(area) => { Some(area.dirtieness_score) }
             }
         }
+
+        pub fn clean_area(&mut self, area_name: &str) -> Result<String, String>
+        {
+            match self.scores.get_mut(&String::from(area_name))
+            {
+                None => { Err("Could not find area: ".to_owned() + area_name) }
+                Some(area) => {
+                    area.dirtieness_score = 0;
+                    Ok(String::from(area_name))
+                }
+            }
+        }
+
         pub fn adjust_score(&mut self, area_name: &str, increment_size: i32) -> Result<u32, String>
         {
             match self.scores.get_mut(&String::from(area_name))
@@ -104,6 +117,27 @@ pub mod store
         {
             let mut store = Store::initialize();
             assert!(store.adjust_score("boo", 1).is_err());
+        }
+
+        #[test]
+        fn clean_area()
+        {
+            let mut store = Store::initialize();
+            let area_name = "bathroom sink";
+            store.declare_area(area_name);
+            assert_eq!(store.score_of(area_name).unwrap(), 0);
+            assert_eq!(store.adjust_score(area_name, 5).unwrap(), 5);
+            assert!(store.clean_area(area_name).is_ok());
+            assert_eq!(store.score_of(area_name).unwrap(), 0);
+            assert!(store.clean_area(area_name).is_ok());
+            assert_eq!(store.score_of(area_name).unwrap(), 0);
+        }
+
+        #[test]
+        fn clean_nonexistant_area()
+        {
+            let mut store = Store::initialize();
+            assert!(store.clean_area("boo").is_err());
         }
     }
 }
