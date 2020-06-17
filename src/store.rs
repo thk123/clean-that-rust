@@ -1,7 +1,7 @@
 pub mod store
 {
     use std::cmp::max;
-    use self::unqlite::{UnQLite, KV, Error};
+    use self::unqlite::{UnQLite, KV};
     use std::convert::TryInto;
 
     extern crate unqlite;
@@ -9,15 +9,15 @@ pub mod store
     pub struct Store
     {
         // scores: std::collections::HashMap<String, DirtyArea>,
-        database : UnQLite,
+        database: UnQLite,
     }
 
-    fn convert_to(dirtiness : u32) -> [u8; 4]
+    fn convert_to(dirtiness: u32) -> [u8; 4]
     {
         dirtiness.to_le_bytes()
     }
 
-    fn convert_from(stored_data : &Vec<u8>) -> u32
+    fn convert_from(stored_data: &Vec<u8>) -> u32
     {
         if stored_data.len() != 4
         {
@@ -36,8 +36,11 @@ pub mod store
                 return Err("Area already exists ".to_owned() + area_name);
             }
 
-            self.database.kv_store(&String::from(area_name), convert_to(0));
-            Ok(String::from(area_name))
+            match self.database.kv_store(&String::from(area_name), convert_to(0))
+            {
+                Ok(_) => {Ok(String::from(area_name))},
+                Err(_) => {Err(String::from("Error writing to database"))},
+            }
         }
         pub fn score_of(&self, area_name: &str) -> std::option::Option<u32>
         {
@@ -45,8 +48,8 @@ pub mod store
             {
                 Ok(score) => {
                     Some(convert_from(&score))
-                },
-                Err(_) => { None },
+                }
+                Err(_) => { None }
             }
         }
 
@@ -57,8 +60,10 @@ pub mod store
                 return Err("Area does not exist: ".to_owned() + area_name);
             }
 
-            self.database.kv_store(&String::from(area_name), convert_to(0));
-            return Ok(String::from(area_name));
+            match self.database.kv_store(&String::from(area_name), convert_to(0)) {
+                Ok(_) => {Ok(String::from(area_name))},
+                Err(_) => {Err(String::from("Error writing to database"))},
+            }
         }
 
         pub fn adjust_score(&self, area_name: &str, increment_size: i32) -> Result<u32, String>
@@ -66,12 +71,15 @@ pub mod store
             let current_score = self.score_of(area_name);
             match current_score
             {
-                None => { Err("Could not find ".to_owned() + area_name) },
+                None => { Err("Could not find ".to_owned() + area_name) }
                 Some(current_score) => {
                     let new_score = max(current_score as i32 + increment_size, 0) as u32;
-                    self.database.kv_store(area_name, convert_to(new_score));
-                    Ok(new_score)
-                },
+                    match self.database.kv_store(area_name, convert_to(new_score)) {
+                        Ok(_) => {Ok(new_score)},
+                        Err(_) => {Err(String::from("Error writing to datbase"))},
+                    }
+
+                }
             }
         }
 
@@ -80,10 +88,10 @@ pub mod store
             Store { database: UnQLite::create_temp() }
         }
 
-        pub fn initialize_from(database_str : &str) -> Store
+        pub fn initialize_from(database_str: &str) -> Store
         {
             Store {
-                database : UnQLite::create(database_str),
+                database: UnQLite::create(database_str),
             }
         }
     }
@@ -91,21 +99,20 @@ pub mod store
     #[cfg(test)]
     mod store_tests {
         use crate::Store;
-        use super::unqlite::UnQLite;
         use std::fs;
 
         #[test]
         fn add_an_area()
         {
-            let mut store = Store::initialize();
-            store.declare_area("bathroom sink");
+            let store = Store::initialize();
+            assert!(store.declare_area("bathroom sink").is_ok());
             assert_eq!(store.score_of("bathroom sink").unwrap(), 0);
         }
 
         #[test]
         fn add_duplicate_area()
         {
-            let mut store = Store::initialize();
+            let store = Store::initialize();
             assert!(store.declare_area("bathroom sink").is_ok());
             assert!(store.declare_area("bathroom sink").is_err());
         }
@@ -113,16 +120,16 @@ pub mod store
         #[test]
         fn get_nonexistant_area()
         {
-            let mut store = Store::initialize();
+            let store = Store::initialize();
             assert!(store.score_of("bla").is_none());
         }
 
         #[test]
         fn increment_score()
         {
-            let mut store = Store::initialize();
+            let store = Store::initialize();
             let area_name = "bathroom sink";
-            store.declare_area(area_name);
+            assert!(store.declare_area(area_name).is_ok());
             assert_eq!(store.score_of(area_name).unwrap(), 0);
             assert_eq!(store.adjust_score(area_name, 1).unwrap(), 1);
             assert_eq!(store.score_of(area_name).unwrap(), 1);
@@ -135,16 +142,16 @@ pub mod store
         #[test]
         fn increment_score_on_invalid_room()
         {
-            let mut store = Store::initialize();
+            let store = Store::initialize();
             assert!(store.adjust_score("boo", 1).is_err());
         }
 
         #[test]
         fn clean_area()
         {
-            let mut store = Store::initialize();
+            let store = Store::initialize();
             let area_name = "bathroom sink";
-            store.declare_area(area_name);
+            assert!(store.declare_area(area_name).is_ok());
             assert_eq!(store.score_of(area_name).unwrap(), 0);
             assert_eq!(store.adjust_score(area_name, 5).unwrap(), 5);
             assert!(store.clean_area(area_name).is_ok());
@@ -156,7 +163,7 @@ pub mod store
         #[test]
         fn clean_nonexistant_area()
         {
-            let mut store = Store::initialize();
+            let store = Store::initialize();
             assert!(store.clean_area("boo").is_err());
         }
 
@@ -166,16 +173,16 @@ pub mod store
             let database_title = "test_database";
             let area_name = "bathroom sink";
             {
-                let mut store = Store::initialize_from(&database_title);
-                store.declare_area(area_name);
+                let store = Store::initialize_from(&database_title);
+                assert!(store.declare_area(area_name).is_ok());
                 assert_eq!(store.adjust_score(area_name, 5).unwrap(), 5);
             }
             {
-                let mut store = Store::initialize_from(&database_title);
+                let store = Store::initialize_from(&database_title);
                 assert_eq!(store.score_of(area_name).unwrap(), 5);
             }
 
-            fs::remove_file(database_title);
+            fs::remove_file(database_title).expect("Deleting test db failed");
         }
     }
 }
