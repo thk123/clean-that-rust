@@ -33,8 +33,8 @@ pub mod store
         {
             match self.scores.get(&String::from(area_name))
             {
-                None => { None },
-                Some(area) => { Some(area.dirtieness_score) },
+                None => { None }
+                Some(area) => { Some(area.dirtieness_score) }
             }
         }
         pub fn adjust_score(&mut self, area_name: &str, increment_size: i32) -> Result<u32, String>
