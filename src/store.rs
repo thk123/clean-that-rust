@@ -48,6 +48,7 @@ pub mod store
             assert_eq!(store.score_of("bathroom sink").expect("Room not found"), 0);
         }
 
+        #[test]
         fn get_nonexistant_area()
         {
             let mut store = Store::initialize();
