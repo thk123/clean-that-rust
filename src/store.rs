@@ -15,13 +15,19 @@ pub mod store
 
     impl Store
     {
-        pub fn declare_area(&mut self, area_name: &str)
+        pub fn declare_area(&mut self, area_name: &str) -> Result<String, String>
         {
+            if self.scores.contains_key(&String::from(area_name))
+            {
+                return Err("Area already exists ".to_owned() + area_name);
+            }
+
             let new_area = DirtyArea {
                 area_name: String::from(area_name),
                 dirtieness_score: 0,
             };
             self.scores.insert(String::from(area_name), new_area);
+            Ok(String::from(area_name))
         }
         pub fn score_of(&self, area_name: &str) -> std::option::Option<u32>
         {
@@ -60,7 +66,15 @@ pub mod store
         {
             let mut store = Store::initialize();
             store.declare_area("bathroom sink");
-            assert_eq!(store.score_of("bathroom sink").expect("Room not found"), 0);
+            assert_eq!(store.score_of("bathroom sink").unwrap(), 0);
+        }
+
+        #[test]
+        fn add_duplicate_area()
+        {
+            let mut store = Store::initialize();
+            assert!(store.declare_area("bathroom sink").is_ok());
+            assert!(store.declare_area("bathroom sink").is_err());
         }
 
         #[test]
