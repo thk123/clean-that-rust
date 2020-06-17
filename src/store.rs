@@ -1,5 +1,7 @@
 pub mod store
 {
+    use std::cmp::max;
+
     pub struct DirtyArea
     {
         area_name: String,
@@ -29,6 +31,19 @@ pub mod store
                 Some(area) => { Some(area.dirtieness_score) },
             }
         }
+        pub fn adjust_score(&mut self, area_name: &str, increment_size: i32) -> Result<u32, String>
+        {
+            match self.scores.get_mut(&String::from(area_name))
+            {
+                None => { Err("Could not find ".to_owned() + area_name) }
+                Some(area) =>
+                    {
+                        let new_score = area.dirtieness_score as i32 + increment_size;
+                        area.dirtieness_score = max(new_score, 0) as u32;
+                        Ok(area.dirtieness_score)
+                    }
+            }
+        }
 
         pub fn initialize() -> Store
         {
@@ -53,6 +68,28 @@ pub mod store
         {
             let mut store = Store::initialize();
             assert!(store.score_of("bla").is_none());
+        }
+
+        #[test]
+        fn increment_score()
+        {
+            let mut store = Store::initialize();
+            let area_name = "bathroom sink";
+            store.declare_area(area_name);
+            assert_eq!(store.score_of(area_name).unwrap(), 0);
+            assert_eq!(store.adjust_score(area_name, 1).unwrap(), 1);
+            assert_eq!(store.score_of(area_name).unwrap(), 1);
+            assert_eq!(store.adjust_score(area_name, -1).unwrap(), 0);
+            assert_eq!(store.score_of(area_name).unwrap(), 0);
+            assert_eq!(store.adjust_score(area_name, -1).unwrap(), 0);
+            assert_eq!(store.score_of(area_name).unwrap(), 0);
+        }
+
+        #[test]
+        fn increment_score_on_invalid_room()
+        {
+            let mut store = Store::initialize();
+            assert!(store.adjust_score("boo", 1).is_err());
         }
     }
 }
