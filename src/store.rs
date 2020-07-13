@@ -1,7 +1,7 @@
 pub mod store
 {
     use std::cmp::max;
-    use self::unqlite::{UnQLite, KV};
+    use self::unqlite::{UnQLite, KV, Transaction};
     use std::convert::TryInto;
 
     extern crate unqlite;
@@ -9,7 +9,7 @@ pub mod store
     pub struct Store
     {
         // scores: std::collections::HashMap<String, DirtyArea>,
-        database: UnQLite,
+        database_address : String,
     }
 
     fn convert_to(dirtiness: u32) -> [u8; 4]
@@ -29,14 +29,18 @@ pub mod store
 
     impl Store
     {
+        fn database(&self) -> UnQLite {
+            UnQLite::create(&self.database_address)
+        }
+
         pub fn declare_area(&self, area_name: &str) -> Result<String, String>
         {
-            if self.database.kv_contains(&String::from(area_name))
+            if self.database().kv_contains(&String::from(area_name))
             {
                 return Err("Area already exists ".to_owned() + area_name);
             }
 
-            match self.database.kv_store(&String::from(area_name), convert_to(0))
+            match self.database().kv_store(&String::from(area_name), convert_to(0))
             {
                 Ok(_) => {Ok(String::from(area_name))},
                 Err(_) => {Err(String::from("Error writing to database"))},
@@ -44,7 +48,7 @@ pub mod store
         }
         pub fn score_of(&self, area_name: &str) -> std::option::Option<u32>
         {
-            match self.database.kv_fetch(area_name)
+            match self.database().kv_fetch(area_name)
             {
                 Ok(score) => {
                     Some(convert_from(&score))
@@ -55,15 +59,17 @@ pub mod store
 
         pub fn clean_area(&self, area_name: &str) -> Result<String, String>
         {
-            if !self.database.kv_contains(&String::from(area_name))
+            if !self.database().kv_contains(&String::from(area_name))
             {
                 return Err("Area does not exist: ".to_owned() + area_name);
             }
 
-            match self.database.kv_store(&String::from(area_name), convert_to(0)) {
+            let result = match self.database().kv_store(&String::from(area_name), convert_to(0)) {
                 Ok(_) => {Ok(String::from(area_name))},
                 Err(_) => {Err(String::from("Error writing to database"))},
-            }
+            };
+
+            return result;
         }
 
         pub fn adjust_score(&self, area_name: &str, increment_size: i32) -> Result<u32, String>
@@ -74,24 +80,26 @@ pub mod store
                 None => { Err("Could not find ".to_owned() + area_name) }
                 Some(current_score) => {
                     let new_score = max(current_score as i32 + increment_size, 0) as u32;
-                    match self.database.kv_store(area_name, convert_to(new_score)) {
+
+                    let result = match self.database().kv_store(area_name, convert_to(new_score)) {
                         Ok(_) => {Ok(new_score)},
                         Err(_) => {Err(String::from("Error writing to datbase"))},
-                    }
+                    };
 
+                    return result;
                 }
             }
         }
 
         pub fn initialize() -> Store
         {
-            Store { database: UnQLite::create_temp() }
+            Store::initialize_from("temp")
         }
 
-        pub fn initialize_from(database_str: &str) -> Store
+        pub fn initialize_from(database_address: &str) -> Store
         {
             Store {
-                database: UnQLite::create(database_str),
+                database_address: String::from(database_address),
             }
         }
     }
@@ -107,6 +115,7 @@ pub mod store
             let store = Store::initialize();
             assert!(store.declare_area("bathroom sink").is_ok());
             assert_eq!(store.score_of("bathroom sink").unwrap(), 0);
+            fs::remove_file("temp").expect("Deleting test db failed");
         }
 
         #[test]
@@ -115,6 +124,7 @@ pub mod store
             let store = Store::initialize();
             assert!(store.declare_area("bathroom sink").is_ok());
             assert!(store.declare_area("bathroom sink").is_err());
+            fs::remove_file("temp").expect("Deleting test db failed");
         }
 
         #[test]
@@ -122,6 +132,7 @@ pub mod store
         {
             let store = Store::initialize();
             assert!(store.score_of("bla").is_none());
+            fs::remove_file("temp").expect("Deleting test db failed");
         }
 
         #[test]
@@ -137,6 +148,7 @@ pub mod store
             assert_eq!(store.score_of(area_name).unwrap(), 0);
             assert_eq!(store.adjust_score(area_name, -1).unwrap(), 0);
             assert_eq!(store.score_of(area_name).unwrap(), 0);
+            fs::remove_file("temp").expect("Deleting test db failed");
         }
 
         #[test]
@@ -144,6 +156,7 @@ pub mod store
         {
             let store = Store::initialize();
             assert!(store.adjust_score("boo", 1).is_err());
+            fs::remove_file("temp").expect("Deleting test db failed");
         }
 
         #[test]
@@ -158,6 +171,7 @@ pub mod store
             assert_eq!(store.score_of(area_name).unwrap(), 0);
             assert!(store.clean_area(area_name).is_ok());
             assert_eq!(store.score_of(area_name).unwrap(), 0);
+            fs::remove_file("temp").expect("Deleting test db failed");
         }
 
         #[test]
@@ -165,6 +179,7 @@ pub mod store
         {
             let store = Store::initialize();
             assert!(store.clean_area("boo").is_err());
+            fs::remove_file("temp").expect("Deleting test db failed");
         }
 
         #[test]
